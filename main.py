@@ -97,6 +97,8 @@ current_start_time = None
 
 @app.route('/')
 def index():
+    if request.method == 'HEAD':
+        return '', 200  # Respond quickly to HEAD requests
     df = fetch_contractions_from_db()
     print(df)  # Debug: print the DataFrame to check its content
     fig, ax = plt.subplots(figsize=(15, 6))
