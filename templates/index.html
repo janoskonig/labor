@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Vajúdás tracker</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <h1>Vajúdásvizsgáló</h1>
+    <button id="startButton" type="button">Start</button>
+    <button id="endButton" type="button" disabled>Vége</button>
+    <form id="severityForm" style="display: none;">
+        <label for="severity">Összehúzódás ereje (1-10):</label>
+        <input type="number" id="severity" name="severity" min="1" max="10" required>
+        <button type="submit">Küldés és stop</button>
+    </form>
+
+    <h2>Kontrakciók ideje, erőssége:</h2>
+    <ul id="contractionList">
+        {% for contraction in contractions %}
+            <li>Kezdete: {{ contraction['start'] }} - vége: {{ contraction['end'] }} - Hossz: {{ contraction['duration'] }} seconds - Erőssége: {{ contraction['severity'] }}</li>
+        {% endfor %}
+    </ul>
+
+    <h2>Kontrakciók az idő előrehaladtával:</h2>
+    {% if img_str %}
+        <img src="data:image/png;base64,{{ img_str }}" alt="Contraction Plot">
+    {% else %}
+        <p>Nincs megmutatható.</p>
+    {% endif %}
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const startButton = document.getElementById('startButton');
+            const endButton = document.getElementById('endButton');
+            const severityForm = document.getElementById('severityForm');
+            const contractionList = document.getElementById('contractionList');
+            let startTime;
+
+            startButton.addEventListener('click', function() {
+                fetch('/start_timer', { method: 'POST' })
+                    .then(response => response.json())
+                    .then(data => {
+                        startTime = new Date(data.start_time);
+                        startButton.disabled = true;
+                        endButton.disabled = false;
+                        severityForm.style.display = 'block';
+                    });
+            });
+
+            severityForm.addEventListener('submit', function(event) {
+                event.preventDefault();
+                const severity = document.getElementById('severity').value;
+                fetch('/end_timer', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ severity: severity })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    const endTime = new Date(data.end_time);
+                    const duration = data.duration;
+                    const listItem = document.createElement('li');
+                    listItem.textContent = `Start: ${startTime} - End: ${endTime} - Duration: ${duration} seconds - Severity: ${data.severity}`;
+                    contractionList.appendChild(listItem);
+                    startButton.disabled = false;
+                    endButton.disabled = true;
+                    severityForm.style.display = 'none';
+                    document.getElementById('severity').value = '';
+                    location.reload();
+                });
+            });
+        });
+    </script>
+</body>
+</html>
