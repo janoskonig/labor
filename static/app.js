@@ -32,7 +32,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const endTime = new Date(data.end_time);
             const duration = data.duration;
             const listItem = document.createElement('li');
-            listItem.textContent = `Start: ${startTime} - End: ${endTime} - Duration: ${duration} seconds - Severity: ${data.severity}`;
+            listItem.textContent = `Kezdete: ${startTime} - vége: ${endTime} - Hossz: ${duration} seconds - Erőssége: ${data.severity}`;
             contractionList.appendChild(listItem);
             startButton.disabled = false;
             endButton.disabled = true;

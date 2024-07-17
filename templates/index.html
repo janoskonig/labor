@@ -29,6 +29,10 @@
     {% else %}
         <p>Nincs megmutatható.</p>
     {% endif %}
+    
+    <h2>Predicted Birth Time:</h2>
+    <p>{{ predicted_birth_time }}</p>
+
     <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>

@@ -2,6 +2,7 @@ import os
 import base64
 from io import BytesIO
 import pandas as pd
+import numpy as np
 import matplotlib
 import matplotlib.colors as mcolors
 from flask import Flask, render_template, request, jsonify, redirect
@@ -89,39 +90,67 @@ def plot_to_base64(fig):
     buf.close()
     return img_str
 
+# Prediction and plotting function
+def predict_birth_time_with_plot(data, rolling_window_size=10, threshold=0.1):
+    data['start_time'] = pd.to_datetime(data['start_time'])
+    data['end_time'] = pd.to_datetime(data['end_time'])
+    
+    # Compute intervals between the start of consecutive contractions
+    data['interval'] = data['start_time'].diff().dt.total_seconds().fillna(0)
+    data['time_since_start'] = (data['start_time'] - data['start_time'].iloc[0]).dt.total_seconds()
+    
+    # Calculate the rolling standard deviation of intervals and durations
+    data['rolling_interval_std'] = data['interval'].rolling(window=rolling_window_size).std()
+    data['rolling_duration_std'] = data['duration'].rolling(window=rolling_window_size).std()
+    
+    # Determine the point where both rolling standard deviations approach zero
+    zero_std_index = np.where((data['rolling_interval_std'] <= threshold) & (data['rolling_duration_std'] <= threshold))[0]
+    
+    if len(zero_std_index) > 0:
+        birth_time_seconds = data['time_since_start'].iloc[zero_std_index[0]]
+        predicted_birth_time = data['start_time'].iloc[0] + pd.Timedelta(seconds=birth_time_seconds)
+    else:
+        predicted_birth_time = "Egyelőre nincs elég adat."
+    
+    # Plotting the data
+    fig, ax = plt.subplots(figsize=(15, 6))
+    
+    # Scatter plot of duration vs start_time
+    scatter = ax.scatter(data['start_time'], data['duration'], c=data['severity'], cmap='plasma', s=100, alpha=0.7)
+    plt.colorbar(scatter, ax=ax, label='Severity')
+
+    # Calculate the upper and lower bounds of standard deviation
+    mean_duration = data['duration'].rolling(window=rolling_window_size).mean()
+    upper_bound = mean_duration + data['rolling_duration_std']
+    lower_bound = mean_duration - data['rolling_duration_std']
+    
+    # Plot the mean duration with upper and lower bounds
+    ax.plot(data['start_time'], mean_duration, label='Mean Duration', color='green')
+    ax.plot(data['start_time'], upper_bound, label='Upper Bound (Mean + SD)', linestyle='--', color='red')
+    ax.plot(data['start_time'], lower_bound, label='Lower Bound (Mean - SD)', linestyle='--', color='red')
+    
+    ax.set_xlabel('Időpont')
+    ax.set_ylabel('Időtartam (másodperc)')
+    ax.legend()
+    ax.set_title('Kontrakciók időtartama az idő függvényében')
+    
+    img_str = plot_to_base64(fig)
+    plt.close(fig)
+    
+    return predicted_birth_time, img_str
+
 @app.route('/')
 def index():
     df = fetch_contractions_from_db()
-    fig, ax = plt.subplots(figsize=(15, 6))
     if not df.empty:
-        df['start_time'] = pd.to_datetime(df['start_time'])  # Ensure datetime format
-        df.set_index('start_time', inplace=True)
-        # Create a custom colormap
-        cdict = {
-            'red':   [(0.0, 0.0, 0.0),  # Blue
-                      (0.5, 0.0, 0.0),  # Green
-                      (1.0, 1.0, 1.0)], # Red
-            'green': [(0.0, 0.0, 0.0),  # Blue
-                      (0.5, 1.0, 1.0),  # Green
-                      (1.0, 0.0, 0.0)], # Red
-            'blue':  [(0.0, 1.0, 1.0),  # Blue
-                      (0.5, 0.0, 0.0),  # Green
-                      (1.0, 0.0, 0.0)]  # Red
-        }
-        custom_cmap = mcolors.LinearSegmentedColormap('BlGrRd', cdict)
-        scatter = ax.scatter(df.index, df['duration'], c=df['severity'], cmap=custom_cmap, s=100, alpha=0.7)
-        ax.set_xlabel('Date and Time')
-        ax.set_ylabel('Duration (seconds)')
-        ax.set_title('Contractions')
-        plt.xticks(rotation=45)
-        plt.colorbar(scatter, ax=ax, label='Severity')
-        img_str = plot_to_base64(fig)
+        predicted_birth_time, img_str = predict_birth_time_with_plot(df)
         print("Plot generated successfully")
     else:
         img_str = None
+        predicted_birth_time = None
         print("No data to plot")  # Debug: No data
-    plt.close(fig)
-    return render_template('index.html', img_str=img_str, contractions=df.to_dict(orient='records'))
+    
+    return render_template('index.html', img_str=img_str, contractions=df.to_dict(orient='records'), predicted_birth_time=predicted_birth_time)
 
 @app.route('/start_timer', methods=['POST'])
 def start_timer():

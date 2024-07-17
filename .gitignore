@@ -1,3 +1,6 @@
 .env
 backup/
 test.py
+simu.py
+contractions.csv
+simulated_contractions.csv
