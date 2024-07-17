@@ -12,23 +12,30 @@ body {
 h1 {
     font-size: 24px;
     margin: 20px 0;
+    text-align: center;
 }
 
 h2 {
     font-size: 18px;
     margin: 10px 0;
+    text-align: center;
 }
 
 button {
-    padding: 10px 20px;
+    padding: 15px 0;
     font-size: 16px;
     margin: 10px 5px;
+    width: 90%;
+    max-width: 400px;
+    display: block;
 }
 
 form {
     display: flex;
     flex-direction: column;
     align-items: center;
+    width: 90%;
+    max-width: 400px;
 }
 
 form label {
@@ -39,6 +46,8 @@ form input, form button {
     margin-bottom: 10px;
     font-size: 16px;
     padding: 10px;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 ul {
@@ -54,6 +63,7 @@ ul li {
     padding: 10px;
     border-radius: 5px;
     box-shadow: 0 0 5px rgba(0,0,0,0.1);
+    font-size: 16px;
 }
 
 /* Styles for the contraction plot */
@@ -75,7 +85,7 @@ img {
 
     button, form input, form button {
         font-size: 14px;
-        padding: 8px;
+        padding: 10px;
     }
 
     ul li {
