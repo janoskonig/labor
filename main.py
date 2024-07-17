@@ -16,8 +16,18 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.exc import OperationalError
 import time
 import threading
+import pytz
+from datetime import datetime
 
+# Set your local timezone and the server timezone
+LOCAL_TIMEZONE = pytz.timezone("Europe/Budapest")  # Example: Budapest
+SERVER_TIMEZONE = pytz.timezone("UTC")  # Assuming Render server is in UTC
 
+def get_local_time():
+    # Get the current time in the server's timezone and convert to local timezone
+    server_time = datetime.now(SERVER_TIMEZONE)
+    local_time = server_time.astimezone(LOCAL_TIMEZONE)
+    return local_time
 
 load_dotenv(".env")
 
@@ -123,7 +133,7 @@ def index():
 @app.route('/start_timer', methods=['POST'])
 def start_timer():
     global current_start_time
-    current_start_time = datetime.datetime.now()
+    current_start_time = get_local_time()  # Use local time
     return jsonify({'status': 'Timer started', 'start_time': current_start_time.strftime("%Y-%m-%d %H:%M:%S")})
 
 @app.route('/end_timer', methods=['POST'])
@@ -132,7 +142,7 @@ def end_timer():
     if current_start_time is None:
         return jsonify({'status': 'No timer running'})
     
-    end_time = datetime.datetime.now()
+    end_time = get_local_time()  # Use local time
     duration = (end_time - current_start_time).total_seconds()
     severity = request.json.get('severity', 1)
     contractions.append({'start': current_start_time, 'end': end_time, 'duration': duration, 'severity': severity})
