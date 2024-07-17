@@ -68,7 +68,8 @@
                     endButton.disabled = true;
                     severityForm.style.display = 'none';
                     document.getElementById('severity').value = '';
-                    location.reload();
+                    // location.reload();
+                    updateChart(); // Ensure this function does not cause unnecessary reloads
                 });
             });
         });
