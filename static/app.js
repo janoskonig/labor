@@ -13,10 +13,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 startButton.disabled = true;
                 endButton.disabled = false;
                 severityForm.style.display = 'block';
-            });
+            })
+            .catch(error => console.error('Error starting timer:', error));
     });
 
-    endButton.addEventListener('click', function() {
+    severityForm.addEventListener('submit', function(event) {
+        event.preventDefault();
         const severity = document.getElementById('severity').value;
         fetch('/end_timer', {
             method: 'POST',
@@ -36,20 +38,12 @@ document.addEventListener('DOMContentLoaded', function() {
             endButton.disabled = true;
             severityForm.style.display = 'none';
             document.getElementById('severity').value = '';
-            updateChart();
-        });
+            location.reload();  // Reload the page to update the plot
+        })
+        .catch(error => console.error('Error stopping timer:', error));
     });
 
-    function updateChart() {
-        fetch('/plot_data')
-            .then(response => response.json())
-            .then(data => {
-                const graphData = JSON.parse(data.data);
-                const layout = JSON.parse(data.layout);
-                Plotly.newPlot('contractionChart', graphData, layout);
-            });
-    }
-
-    updateChart();
-    setInterval(updateChart, 600000); // Update the chart every 10 minutes
+    setInterval(function() {
+        location.reload();  // Reload the page every 10 minutes to update the plot
+    }, 600000);
 });

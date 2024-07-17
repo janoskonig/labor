@@ -1,15 +1,9 @@
 import os
 import base64
-import datetime
 from io import BytesIO
-
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
-
-
 import pandas as pd
+import matplotlib
+import matplotlib.colors as mcolors
 from flask import Flask, render_template, request, jsonify, redirect
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
@@ -19,9 +13,13 @@ import threading
 import pytz
 from datetime import datetime
 
+# Use Agg backend to save the plot to a buffer
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+
 # Set your local timezone and the server timezone
 LOCAL_TIMEZONE = pytz.timezone("Europe/Budapest")  # Example: Budapest
-SERVER_TIMEZONE = pytz.timezone("UTC")  # Assuming Render server is in UTC
+SERVER_TIMEZONE = pytz.timezone("UTC")  # Assuming server is in UTC
 
 def get_local_time():
     # Get the current time in the server's timezone and convert to local timezone
@@ -59,11 +57,11 @@ def ping_db():
 thread = threading.Thread(target=ping_db)
 thread.daemon = True
 thread.start()
+
 # Save contraction to database
 def save_contraction_to_db(start, end, duration, severity):
     try:
         print(f"Inserting data into DB: start={start}, end={end}, duration={duration}, severity={severity}")  # Debug
-        engine = create_db_engine()
         with engine.connect() as connection:
             query = text("INSERT INTO contractions (start_time, end_time, duration, severity) VALUES (:start, :end, :duration, :severity)")
             connection.execute(query, {"start": start, "end": end, "duration": duration, "severity": severity})
@@ -75,7 +73,6 @@ def save_contraction_to_db(start, end, duration, severity):
 # Fetch contractions from database
 def fetch_contractions_from_db():
     try:
-        engine = create_db_engine()
         df = pd.read_sql('SELECT * FROM contractions', con=engine)
         print("Data fetched successfully")  # Debug
         return df
@@ -92,15 +89,9 @@ def plot_to_base64(fig):
     buf.close()
     return img_str
 
-contractions = []
-current_start_time = None
-
 @app.route('/')
 def index():
-    if request.method == 'HEAD':
-        return '', 200  # Respond quickly to HEAD requests
     df = fetch_contractions_from_db()
-    print(df)  # Debug: print the DataFrame to check its content
     fig, ax = plt.subplots(figsize=(15, 6))
     if not df.empty:
         df['start_time'] = pd.to_datetime(df['start_time'])  # Ensure datetime format
@@ -119,18 +110,18 @@ def index():
         }
         custom_cmap = mcolors.LinearSegmentedColormap('BlGrRd', cdict)
         scatter = ax.scatter(df.index, df['duration'], c=df['severity'], cmap=custom_cmap, s=100, alpha=0.7)
-        ax.set_xlabel('dátum - időpont')
-        ax.set_ylabel('Hossza (seconds)')
-        ax.set_title('Kontrakciók')
+        ax.set_xlabel('Date and Time')
+        ax.set_ylabel('Duration (seconds)')
+        ax.set_title('Contractions')
         plt.xticks(rotation=45)
-        plt.colorbar(scatter, ax=ax, label='Erősség')
+        plt.colorbar(scatter, ax=ax, label='Severity')
         img_str = plot_to_base64(fig)
         print("Plot generated successfully")
     else:
         img_str = None
         print("No data to plot")  # Debug: No data
     plt.close(fig)
-    return render_template('index.html', img_str=img_str, contractions=contractions)
+    return render_template('index.html', img_str=img_str, contractions=df.to_dict(orient='records'))
 
 @app.route('/start_timer', methods=['POST'])
 def start_timer():
@@ -147,17 +138,13 @@ def end_timer():
     end_time = get_local_time()  # Use local time
     duration = (end_time - current_start_time).total_seconds()
     severity = request.json.get('severity', 1)
-    contractions.append({'start': current_start_time, 'end': end_time, 'duration': duration, 'severity': severity})
     save_contraction_to_db(current_start_time, end_time, duration, severity)
     current_start_time = None
     return jsonify({'status': 'Timer stopped', 'end_time': end_time.strftime("%Y-%m-%d %H:%M:%S"), 'duration': duration, 'severity': severity})
 
 @app.route('/reset')
 def reset():
-    global contractions
-    contractions = []
     try:
-        engine = create_db_engine()
         with engine.connect() as connection:
             connection.execute(text("DELETE FROM contractions"))
             connection.commit()  # Explicit commit
