@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: my-flask-app
+    env: python
+    plan: standard
+    buildCommand: ""
+    startCommand: gunicorn -w 4 -b 0.0.0.0:8000 main:app
