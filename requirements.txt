@@ -6,3 +6,4 @@ matplotlib
 sqlalchemy
 gunicorn
 numpy
+scipy
