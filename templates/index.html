@@ -24,12 +24,14 @@
     </ul>
 
     <h2>Kontrakciók az idő előrehaladtával:</h2>
-    {% if img_str %}
-        <img src="data:image/png;base64,{{ img_str }}" alt="Contraction Plot">
-    {% else %}
+    {% if img_str1 %}
+        <img src="data:image/png;base64,{{ img_str1 }}" alt="Contraction Plot">
+        <img src="data:image/png;base64,{{ img_str2 }}" alt="Contraction Plot">
+        {% else %}
         <p>Nincs megmutatható.</p>
     {% endif %}
     
+
     <h2>Predicted Birth Time:</h2>
     <p>{{ predicted_birth_time }}</p>
 

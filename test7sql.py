@@ -3,32 +3,11 @@ import base64
 from io import BytesIO
 import pandas as pd
 import numpy as np
-import matplotlib
-import matplotlib.colors as mcolors
+import matplotlib.pyplot as plt
 from flask import Flask, render_template, request, jsonify, redirect
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
-from sqlalchemy.exc import OperationalError
-import time
-import threading
-import pytz
-from datetime import datetime
 from scipy.optimize import curve_fit
-
-
-# Use Agg backend to save the plot to a buffer
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-
-# Set your local timezone and the server timezone
-LOCAL_TIMEZONE = pytz.timezone("Europe/Budapest")  # Example: Budapest
-SERVER_TIMEZONE = pytz.timezone("UTC")  # Assuming server is in UTC
-
-def get_local_time():
-    # Get the current time in the server's timezone and convert to local timezone
-    server_time = datetime.now(SERVER_TIMEZONE)
-    local_time = server_time.astimezone(LOCAL_TIMEZONE)
-    return local_time
 
 load_dotenv(".env")
 
@@ -44,34 +23,6 @@ def create_db_engine():
     return create_engine(f'mysql+mysqlconnector://{user}:{password}@{host}:{port}/{database}')
 
 engine = create_db_engine()
-
-def ping_db():
-    global engine
-    while True:
-        time.sleep(600)  # Sleep for 10 minutes
-        try:
-            with engine.connect() as connection:
-                connection.execute(text("SELECT 1"))
-        except OperationalError as err:
-            print(f"Error pinging MySQL: {err}")
-            engine = create_db_engine()
-
-# Start the background thread to ping the database
-thread = threading.Thread(target=ping_db)
-thread.daemon = True
-thread.start()
-
-# Save contraction to database
-def save_contraction_to_db(start, end, duration, severity):
-    try:
-        print(f"Inserting data into DB: start={start}, end={end}, duration={duration}, severity={severity}")  # Debug
-        with engine.connect() as connection:
-            query = text("INSERT INTO contractions (start_time, end_time, duration, severity) VALUES (:start, :end, :duration, :severity)")
-            connection.execute(query, {"start": start, "end": end, "duration": duration, "severity": severity})
-            connection.commit()  # Explicit commit
-        print("Data inserted successfully")  # Debug
-    except Exception as e:
-        print(f"Error inserting data: {e}")  # Debug
 
 # Fetch contractions from database
 def fetch_contractions_from_db():
@@ -92,7 +43,6 @@ def plot_to_base64(fig):
     buf.close()
     return img_str
 
-# Prediction and plotting function
 # Prediction and plotting function
 def predict_birth_time_with_plot(data, window_size=5, exclude_fraction=1/4):
     data['start_time'] = pd.to_datetime(data['start_time'])
@@ -136,21 +86,19 @@ def predict_birth_time_with_plot(data, window_size=5, exclude_fraction=1/4):
     future_times = std_time.min() + pd.to_timedelta(future_times_numeric, unit='s')
 
     # Find the timepoint where rolling_std becomes 0
-    predicted_birth_time = future_times[np.argmin(np.abs(future_rolling_std_pred))]
+    childbirth_timepoint = future_times[np.argmin(np.abs(future_rolling_std_pred))]
 
     # Plot rolling standard deviation with exponential decay fit
-    fig1 = plt.figure(figsize=(14, 7))
+    plt.figure(figsize=(14, 7))
     plt.plot(std_time, rolling_std_filled, label='Actual Rolling Std', color='blue')
     plt.plot(std_time, rolling_std_pred, color='green', linewidth=2, label='Exponential Decay Fit')
     plt.plot(future_times, future_rolling_std_pred, label='Future Predictions', color='purple')
-    plt.axvline(x=predicted_birth_time, color='red', linestyle='--', label='Predicted Childbirth')
+    plt.axvline(x=childbirth_timepoint, color='red', linestyle='--', label='Predicted Childbirth')
     plt.xlabel('Start Time')
     plt.ylabel('Rolling Standard Deviation')
     plt.title('Rolling Standard Deviation Over Time with Exponential Decay Fit and Future Predictions')
     plt.legend()
-    img_str1 = plot_to_base64(fig1)
-    plt.close(fig1)
-    # plt.show()
+    plt.show()
 
     # Calculate rolling mean and 2 SD brackets for existing data
     rolling_mean = data['duration'].rolling(window=window_size).mean()
@@ -167,66 +115,20 @@ def predict_birth_time_with_plot(data, window_size=5, exclude_fraction=1/4):
     rolling_upper_bound_array = np.array(rolling_upper_bound_filled, dtype=float)
 
     # Plot contraction durations with rolling statistics and predicted childbirth
-    fig2 = plt.figure(figsize=(12, 6))
+    plt.figure(figsize=(12, 6))
     plt.scatter(data['start_time'], data['duration'], label='Contraction Durations')
     plt.plot(data['start_time'], rolling_mean, color='r', linestyle='-', label='Rolling Mean Duration')
     plt.plot(data['start_time'], rolling_lower_bound_array, color='g', linestyle='--', label='Rolling Mean ± 2 SD')
     plt.plot(data['start_time'], rolling_upper_bound_array, color='g', linestyle='--')
     plt.fill_between(data['start_time'], rolling_lower_bound_array, rolling_upper_bound_array, color='g', alpha=0.1)
-    plt.axvline(x=predicted_birth_time, color='red', linestyle='--', label='Predicted Childbirth')
+    plt.axvline(x=childbirth_timepoint, color='red', linestyle='--', label='Predicted Childbirth')
     plt.xlabel('Start Time')
     plt.ylabel('Duration (seconds)')
     plt.title('Contraction Durations with Rolling Mean and Rolling 2 SD Brackets')
     plt.legend()
-    img_str2 = plot_to_base64(fig2)
-    plt.close(fig2)
-    # plt.show()
+    plt.show()
     
-    return predicted_birth_time, img_str1, img_str2
-    
+    return childbirth_timepoint
 
-@app.route('/')
-def index():
-    df = fetch_contractions_from_db()
-    if not df.empty:
-        predicted_birth_time, img_str1, img_str2 = predict_birth_time_with_plot(df)
-        print("Plot generated successfully")
-    else:
-        img_str = None
-        predicted_birth_time = None
-        print("No data to plot")  # Debug: No data
-    
-    return render_template('index.html', img_str1=img_str1, img_str2=img_str2, contractions=df.to_dict(orient='records'), predicted_birth_time=predicted_birth_time)
-
-@app.route('/start_timer', methods=['POST'])
-def start_timer():
-    global current_start_time
-    current_start_time = get_local_time()  # Use local time
-    return jsonify({'status': 'Timer started', 'start_time': current_start_time.strftime("%Y-%m-%d %H:%M:%S")})
-
-@app.route('/end_timer', methods=['POST'])
-def end_timer():
-    global current_start_time
-    if current_start_time is None:
-        return jsonify({'status': 'No timer running'})
-    
-    end_time = get_local_time()  # Use local time
-    duration = (end_time - current_start_time).total_seconds()
-    severity = request.json.get('severity', 1)
-    save_contraction_to_db(current_start_time, end_time, duration, severity)
-    current_start_time = None
-    return jsonify({'status': 'Timer stopped', 'end_time': end_time.strftime("%Y-%m-%d %H:%M:%S"), 'duration': duration, 'severity': severity})
-
-@app.route('/reset')
-def reset():
-    try:
-        with engine.connect() as connection:
-            connection.execute(text("DELETE FROM contractions"))
-            connection.commit()  # Explicit commit
-        print("Data reset successfully")  # Debug
-    except Exception as e:
-        print(f"Error resetting data: {e}")  # Debug
-    return redirect('/')
-
-if __name__ == '__main__':
-    app.run(debug=False)
+data = fetch_contractions_from_db()
+predict_birth_time_with_plot(data, window_size=5, exclude_fraction=1/4)
