@@ -159,8 +159,8 @@ def predict_birth_time_with_plot(data, window_size=5, exclude_fraction=1/4):
     rolling_lower_bound = rolling_mean - (2 * rolling_std)
 
     # Fill NaNs with appropriate values
-    rolling_lower_bound_filled = rolling_lower_bound.fillna(method='bfill')
-    rolling_upper_bound_filled = rolling_upper_bound.fillna(method='bfill')
+    rolling_lower_bound_filled = rolling_lower_bound.bfill()
+    rolling_upper_bound_filled = rolling_upper_bound.bfill()
 
     # Convert rolling bounds to numpy arrays
     rolling_lower_bound_array = np.array(rolling_lower_bound_filled, dtype=float)
